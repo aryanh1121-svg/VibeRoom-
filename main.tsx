@@ -1,130 +1,424 @@
-import React, {useEffect, useMemo, useState} from 'react';
-import {createRoot} from 'react-dom/client';
+import React, { useMemo, useState } from 'react';
+import { createRoot } from 'react-dom/client';
 import './style.css';
 
-type Room = {id:number; title:string; host:string; country:string; viewers:number; category:string; live:boolean};
-type User = {id:string; name:string; role:string; banned:boolean; official:boolean};
+type Role = 'OWNER' | 'OFFICIAL' | 'MANAGER' | 'USER';
+
+type Room = {
+  id: number;
+  title: string;
+  host: string;
+  users: number;
+  category: string;
+};
+
+type User = {
+  id: string;
+  name: string;
+  role: Role;
+  banned?: boolean;
+};
 
 const initialRooms: Room[] = [
-  {id:1,title:'Late Night Vibes',host:'Arhan',country:'India',viewers:128,category:'Hot',live:true},
-  {id:2,title:'Music & Chill',host:'Ayaan',country:'Saudi Arabia',viewers:76,category:'Music',live:true},
-  {id:3,title:'Friends Corner',host:'Zoya',country:'Kuwait',viewers:54,category:'Chat',live:true},
-  {id:4,title:'Creative Talk',host:'Riya',country:'India',viewers:31,category:'Creative',live:true},
+  { id: 1, title: 'Late Night Vibes', host: 'Arhan', users: 28, category: 'Popular' },
+  { id: 2, title: 'Music & Chill', host: 'Ayaan', users: 42, category: 'Music' },
+  { id: 3, title: 'Friends Corner', host: 'Zoya', users: 19, category: 'Friends' },
+  { id: 4, title: 'Creative Talk', host: 'Riya', users: 13, category: 'Talk' },
 ];
 
 const gifts = [
-  {name:'Rose', price:10, icon:'🌹'},
-  {name:'Heart', price:50, icon:'❤️'},
-  {name:'Star', price:100, icon:'⭐'},
-  {name:'Crown', price:500, icon:'👑'},
-  {name:'Diamond', price:1000, icon:'💎'},
+  { name: 'Rose', price: 10, icon: '🌹' },
+  { name: 'Heart', price: 50, icon: '❤️' },
+  { name: 'Star', price: 100, icon: '⭐' },
+  { name: 'Crown', price: 500, icon: '👑' },
+  { name: 'Diamond', price: 1000, icon: '💎' },
 ];
 
 const seedUsers: User[] = [
-  {id:'VR10001',name:'Arhan',role:'OWNER',banned:false,official:true},
-  {id:'VR10002',name:'Ayaan',role:'USER',banned:false,official:false},
-  {id:'VR10003',name:'Zoya',role:'OFFICIAL',banned:false,official:true},
+  { id: 'VR10001', name: 'Arhan', role: 'OWNER' },
+  { id: 'VR10002', name: 'Ayaan', role: 'USER' },
+  { id: 'VR10003', name: 'Zoya', role: 'OFFICIAL' },
 ];
 
-function App(){
-  const [tab,setTab]=useState('Home');
-  const [rooms,setRooms]=useState(initialRooms);
-  const [selected,setSelected]=useState<Room|null>(null);
-  const [coins,setCoins]=useState(()=>Number(localStorage.getItem('vibeCoins')||'5000'));
-  const [users,setUsers]=useState<User[]>(seedUsers);
-  const [showAdmin,setShowAdmin]=useState(false);
-  const [toast,setToast]=useState('');
-  const [filter,setFilter]=useState('All');
+function App() {
+  const [tab, setTab] = useState('Home');
+  const [rooms, setRooms] = useState<Room[]>(initialRooms);
+  const [selected, setSelected] = useState<Room | null>(null);
+  const [coins, setCoins] = useState(5000);
+  const [users, setUsers] = useState<User[]>(seedUsers);
+  const [showAdmin, setShowAdmin] = useState(false);
+  const [toast, setToast] = useState('');
 
-  useEffect(()=>localStorage.setItem('vibeCoins',String(coins)),[coins]);
-  useEffect(()=>{ if(toast){const t=setTimeout(()=>setToast(''),1800);return()=>clearTimeout(t)}},[toast]);
+  const [category, setCategory] = useState('All');
 
-  const filtered=useMemo(()=>rooms.filter(r=>filter==='All'||r.country===filter||r.category===filter),[rooms,filter]);
+  const filtered = useMemo(() => {
+    if (category === 'All') return rooms;
+    return rooms.filter((room) => room.category === category);
+  }, [rooms, category]);
 
-  const sendGift=(price:number,name:string)=>{
-    if(coins<price){setToast('Not enough VibeCoins');return}
-    setCoins(c=>c-price); setToast(`${name} sent 🎁`);
-  };
+  function notify(message: string) {
+    setToast(message);
+    setTimeout(() => setToast(''), 2000);
+  }
 
-  const createRoom=()=>{
-    const id=Date.now();
-    setRooms(r=>[{id,title:'My New Room',host:'Arhan',country:'India',viewers:1,category:'Chat',live:true},...r]);
-    setToast('Room created');
-  };
+  function createRoom() {
+    const newRoom: Room = {
+      id: Date.now(),
+      title: `Vibe Room ${rooms.length + 1}`,
+      host: 'Arhan',
+      users: 1,
+      category: 'Friends',
+    };
 
-  const ban=(id:string)=>{
-    setUsers(u=>u.map(x=>x.id===id?{...x,banned:true}:x)); setToast('User banned');
-  };
-  const unban=(id:string)=>{
-    setUsers(u=>u.map(x=>x.id===id?{...x,banned:false}:x)); setToast('User unbanned');
-  };
-  const promote=(id:string)=>{
-    setUsers(u=>u.map(x=>x.id===id?{...x,role:'MANAGER'}:x)); setToast('Manager assigned');
-  };
-  const official=(id:string)=>{
-    setUsers(u=>u.map(x=>x.id===id?{...x,official:true,role:x.role==='USER'?'OFFICIAL':x.role}:x)); setToast('Official status updated');
-  };
+    setRooms((prev) => [newRoom, ...prev]);
+    setSelected(newRoom);
+    notify('Room created successfully');
+  }
 
-  if(selected) return <RoomView room={selected} coins={coins} onBack={()=>setSelected(null)} sendGift={sendGift} toast={toast}/>;
+  function sendGift(price: number, name: string) {
+    if (coins < price) {
+      notify('Not enough coins');
+      return;
+    }
 
-  return <div className="app">
-    <header className="top">
-      <div className="brand">Vibe<span>Room</span></div>
-      <button className="coin" onClick={()=>setToast('Coins are virtual only')}>🪙 {coins}</button>
-      <button className="icon" onClick={()=>setShowAdmin(true)}>☰</button>
-    </header>
+    setCoins((prev) => prev - price);
+    notify(`${name} sent 🎁`);
+  }
 
-    <main>
-      {tab==='Home' && <>
-        <section className="hero">
-          <div><p className="eyebrow">LIVE NOW</p><h1>What’s happening right now?</h1><p>Join a room, meet people and share your vibe.</p></div>
-          <button onClick={createRoom}>＋ Start a room</button>
-        </section>
-        <div className="tabs">{['Popular','Following','Recent'].map((x,i)=><button className={i===0?'active':''} key={x}>{x}</button>)}</div>
-        <div className="chips">{['All','India','Saudi Arabia','Kuwait','Music','Chat','Creative'].map(x=><button className={filter===x?'chip activeChip':'chip'} onClick={()=>setFilter(x)} key={x}>{x}</button>)}</div>
-        <h2>Live rooms</h2>
-        <div className="grid">{filtered.map(r=><RoomCard key={r.id} room={r} onClick={()=>setSelected(r)}/>)}</div>
-      </>}
+  function ban(id: string) {
+    setUsers((prev) =>
+      prev.map((user) =>
+        user.id === id ? { ...user, banned: true } : user
+      )
+    );
+    notify('User banned');
+  }
 
-      {tab==='Explore' && <section className="panel"><h1>Explore</h1><p>Find rooms by country and category.</p><div className="grid">{rooms.map(r=><RoomCard key={r.id} room={r} onClick={()=>setSelected(r)}/>)}</div></section>}
-      {tab==='Message' && <section className="panel"><h1>Messages</h1><div className="message">💬 No messages yet. Your conversations will appear here.</div></section>}
-      {tab==='Me' && <section className="panel profile"><div className="avatar">A</div><h1>Arhan</h1><p>ID: VR10001</p><div className="stats"><b>5,000</b><span>VibeCoins</span><b>0</b><span>Followers</span></div><button onClick={()=>setShowAdmin(true)}>⚙ Management Center</button></section>}
-    </main>
+  function unban(id: string) {
+    setUsers((prev) =>
+      prev.map((user) =>
+        user.id === id ? { ...user, banned: false } : user
+      )
+    );
+    notify('User unbanned');
+  }
 
-    <nav className="bottom">{['Home','Explore','Message','Me'].map(x=><button className={tab===x?'navActive':''} onClick={()=>setTab(x)} key={x}><span>{x==='Home'?'⌂':x==='Explore'?'◉':x==='Message'?'✉':'◉'}</span>{x}</button>)}</nav>
+  function promote(id: string) {
+    setUsers((prev) =>
+      prev.map((user) =>
+        user.id === id ? { ...user, role: 'MANAGER' } : user
+      )
+    );
+    notify('User promoted to Manager');
+  }
 
-    {showAdmin && <Admin users={users} close={()=>setShowAdmin(false)} ban={ban} unban={unban} promote={promote} official={official}/>}
-    {toast && <div className="toast">{toast}</div>}
-  </div>
+  function official(id: string) {
+    setUsers((prev) =>
+      prev.map((user) =>
+        user.id === id ? { ...user, role: 'OFFICIAL' } : user
+      )
+    );
+    notify('Official status added');
+  }
+
+  if (selected) {
+    return (
+      <RoomView
+        room={selected}
+        coins={coins}
+        onBack={() => setSelected(null)}
+        onGift={sendGift}
+      />
+    );
+  }
+
+  return (
+    <div className="app">
+      <header className="top">
+        <div className="brand">
+          Vibe<span>Room</span>
+        </div>
+
+        <button className="coin" onClick={() => notify('Coins: ' + coins)}>
+          🪙 {coins}
+        </button>
+
+        <button className="icon" onClick={() => setShowAdmin(!showAdmin)}>
+          ⚙️
+        </button>
+      </header>
+
+      <main>
+        {tab === 'Home' && (
+          <>
+            <section className="hero">
+              <div>
+                <p className="eyebrow">LIVE VOICE CHAT</p>
+                <h1>Meet. Talk. Vibe.</h1>
+                <p>Join a room and talk with your friends.</p>
+              </div>
+
+              <button className="primary" onClick={createRoom}>
+                ＋ Create Room
+              </button>
+            </section>
+
+            <div className="tabs">
+              {['Popular', 'Music', 'Friends', 'Talk'].map((item) => (
+                <button
+                  key={item}
+                  className={category === item ? 'active' : ''}
+                  onClick={() => setCategory(item)}
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+
+            <div className="chips">
+              {['All', 'Popular', 'Music', 'Friends', 'Talk'].map((item) => (
+                <button
+                  key={item}
+                  className={category === item ? 'chip active' : 'chip'}
+                  onClick={() => setCategory(item)}
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+
+            <h2>Live rooms</h2>
+
+            <div className="grid">
+              {filtered.map((room) => (
+                <RoomCard
+                  key={room.id}
+                  room={room}
+                  onClick={() => setSelected(room)}
+                />
+              ))}
+            </div>
+          </>
+        )}
+
+        {tab === 'Explore' && (
+          <section className="page">
+            <h2>Explore</h2>
+            <p>Discover new voice rooms and communities.</p>
+            <button className="primary" onClick={createRoom}>
+              ＋ Create Room
+            </button>
+          </section>
+        )}
+
+        {tab === 'Message' && (
+          <section className="page">
+            <h2>Messages</h2>
+            <div className="message">No new messages</div>
+          </section>
+        )}
+
+        {tab === 'Me' && (
+          <section className="page">
+            <div className="profile">
+              <div className="avatar">A</div>
+              <h2>Arhan</h2>
+              <p>ID: VR10001</p>
+              <span className="role">OWNER</span>
+            </div>
+
+            <div className="wallet">
+              🪙 Balance: <b>{coins}</b>
+            </div>
+
+            <button
+              className="primary"
+              onClick={() => setShowAdmin(!showAdmin)}
+            >
+              Admin Panel
+            </button>
+          </section>
+        )}
+      </main>
+
+      <nav className="bottom">
+        {['Home', 'Explore', 'Message', 'Me'].map((item) => (
+          <button
+            key={item}
+            className={tab === item ? 'selected' : ''}
+            onClick={() => setTab(item)}
+          >
+            <span>
+              {item === 'Home' && '🏠'}
+              {item === 'Explore' && '🔎'}
+              {item === 'Message' && '💬'}
+              {item === 'Me' && '👤'}
+            </span>
+            {item}
+          </button>
+        ))}
+      </nav>
+
+      {showAdmin && (
+        <Admin
+          users={users}
+          onClose={() => setShowAdmin(false)}
+          onBan={ban}
+          onUnban={unban}
+          onPromote={promote}
+          onOfficial={official}
+        />
+      )}
+
+      {toast && <div className="toast">{toast}</div>}
+    </div>
+  );
 }
 
-function RoomCard({room,onClick}:{room:Room,onClick:()=>void}){
-  return <button className="roomCard" onClick={onClick}>
-    <div className="cover"><div className="roomAvatar">{room.host[0]}</div><span className="live">LIVE</span></div>
-    <div className="roomInfo"><b>{room.title}</b><span>{room.host} · 🇮🇳</span><span>👥 {room.viewers} listening</span></div>
-  </button>
+function RoomCard({
+  room,
+  onClick,
+}: {
+  room: Room;
+  onClick: () => void;
+}) {
+  return (
+    <button className="room-card" onClick={onClick}>
+      <div className="room-avatar">🎙️</div>
+
+      <div className="room-info">
+        <h3>{room.title}</h3>
+        <p>Host: {room.host}</p>
+        <span>👥 {room.users} people</span>
+      </div>
+
+      <div className="live">LIVE</div>
+    </button>
+  );
 }
 
-function RoomView({room,coins,onBack,sendGift,toast}:{room:Room;coins:number;onBack:()=>void;sendGift:(p:number,n:string)=>void;toast:string}){
-  return <div className="roomPage">
-    <header className="roomTop"><button onClick={onBack}>←</button><div><b>{room.title}</b><small>👥 {room.viewers} listening</small></div><button>⋯</button></header>
-    <div className="stage"><div className="hostCircle">{room.host[0]}</div><p>🎙 {room.host} · Host</p><span>Voice room</span></div>
-    <div className="speakers"><h3>Speakers</h3><div className="people"><div>🧑<small>Host</small></div><div>👩<small>Speaker</small></div><div>👨<small>Speaker</small></div></div></div>
-    <div className="chat"><div className="chatLine"><b>Ayaan:</b> Welcome everyone 👋</div><div className="chatLine"><b>Zoya:</b> Nice room!</div></div>
-    <div className="giftRow">{gifts.map(g=><button onClick={()=>sendGift(g.price,g.name)} key={g.name}>{g.icon}<small>{g.price}</small></button>)}</div>
-    <div className="roomActions"><button>🎙 Mic</button><button>✋ Raise</button><button>💬 Chat</button><button>🎮 Games</button></div>
-    <div className="coinBar">🪙 {coins} VibeCoins <span>Virtual currency only</span></div>
-    {toast && <div className="toast">{toast}</div>}
-  </div>
+function RoomView({
+  room,
+  coins,
+  onBack,
+  onGift,
+}: {
+  room: Room;
+  coins: number;
+  onBack: () => void;
+  onGift: (price: number, name: string) => void;
+}) {
+  return (
+    <div className="room-view">
+      <header className="room-header">
+        <button className="back" onClick={onBack}>
+          ←
+        </button>
+
+        <div>
+          <b>{room.title}</b>
+          <small>👥 {room.users} online</small>
+        </div>
+
+        <span>🪙 {coins}</span>
+      </header>
+
+      <div className="stage">
+        <div className="speaker">
+          <div className="big-avatar">A</div>
+          <h2>{room.host}</h2>
+          <span>🎙️ Host</span>
+        </div>
+
+        <div className="people">
+          <div>👤</div>
+          <div>👤</div>
+          <div>👤</div>
+          <div>＋</div>
+        </div>
+      </div>
+
+      <div className="gift-panel">
+        <h3>Send Gift</h3>
+
+        <div className="gift-grid">
+          {gifts.map((gift) => (
+            <button
+              key={gift.name}
+              onClick={() => onGift(gift.price, gift.name)}
+            >
+              <strong>{gift.icon}</strong>
+              <span>{gift.name}</span>
+              <small>🪙 {gift.price}</small>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="room-actions">
+        <button>🎙️ Mic</button>
+        <button>🔊 Speaker</button>
+        <button>💬 Chat</button>
+        <button className="leave" onClick={onBack}>
+          Leave
+        </button>
+      </div>
+    </div>
+  );
 }
 
-function Admin({users,close,ban,unban,promote,official}:{users:User[];close:()=>void;ban:(id:string)=>void;unban:(id:string)=>void;promote:(id:string)=>void;official:(id:string)=>void}){
-  return <div className="modal"><div className="admin"><div className="adminHead"><h2>Management Center</h2><button onClick={close}>✕</button></div>
-    <p className="muted">Owner controls · role-based moderation</p>
-    <div className="adminGrid"><div><b>Users</b><span>{users.length}</span></div><div><b>Reports</b><span>0</span></div><div><b>Managers</b><span>{users.filter(u=>u.role==='MANAGER').length}</span></div></div>
-    <h3>User management</h3>{users.map(u=><div className="userRow" key={u.id}><div><b>{u.name} {u.official?'✓':''}</b><small>{u.id} · {u.role}</small></div><div className="actions">{u.role!=='MANAGER'&&u.role!=='OWNER'&&<button onClick={()=>promote(u.id)}>Manager</button>}{!u.official&&u.role!=='OWNER'&&<button onClick={()=>official(u.id)}>Official</button>}{u.banned?<button onClick={()=>unban(u.id)}>Unban</button>:u.role!=='OWNER'&&<button onClick={()=>ban(u.id)}>Ban</button>}</div></div>)}
-    <div className="notice">Sensitive actions should be enforced by Firebase security rules/server functions in production.</div>
-  </div></div>
+function Admin({
+  users,
+  onClose,
+  onBan,
+  onUnban,
+  onPromote,
+  onOfficial,
+}: {
+  users: User[];
+  onClose: () => void;
+  onBan: (id: string) => void;
+  onUnban: (id: string) => void;
+  onPromote: (id: string) => void;
+  onOfficial: (id: string) => void;
+}) {
+  return (
+    <div className="admin-overlay">
+      <div className="admin">
+        <div className="admin-head">
+          <h2>Admin Panel</h2>
+          <button onClick={onClose}>✕</button>
+        </div>
+
+        {users.map((user) => (
+          <div className="user-row" key={user.id}>
+            <div className="user-avatar">{user.name[0]}</div>
+
+            <div className="user-details">
+              <b>{user.name}</b>
+              <small>{user.id}</small>
+              <span>{user.role}</span>
+            </div>
+
+            <div className="user-actions">
+              {user.banned ? (
+                <button onClick={() => onUnban(user.id)}>Unban</button>
+              ) : (
+                <button onClick={() => onBan(user.id)}>Ban</button>
+              )}
+
+              <button onClick={() => onPromote(user.id)}>Manager</button>
+              <button onClick={() => onOfficial(user.id)}>Official</button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
-createRoot(document.getElementById('root')!).render(<App/>);
+createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
